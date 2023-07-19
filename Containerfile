@@ -1,49 +1,28 @@
-ARG SWAYVNC_VERSION=latest
-FROM ghcr.io/bbusse/swayvnc:${SWAYVNC_VERSION}
+ARG ALPINE_VERSION=3.18
+FROM rust:alpine${ALPINE_VERSION}
 LABEL maintainer="Björn Busse <bj.rn@baerlin.eu>"
-LABEL org.opencontainers.image.source https://github.com/bbusse/swayvnc-firefox
+LABEL org.opencontainers.image.source https://github.com/bbusse/waystream
 
-ENV ARCH="x86_64" \
-    USER="firefox-user" \
-    APK_ADD="libc-dev libffi-dev libxkbcommon-dev gcc geckodriver@testing git python3 python3-dev py3-pip py3-wheel firefox" \
-    APK_DEL=""
+ARG ALPINE_VERSION
 
-USER root
+ENV USER="build-user" \
+    APK_ADD="gstreamer-dev musl-dev gst-plugins-rs-dev"
 
-# Add application user and application
-# Cleanup: Remove files and users
-RUN addgroup -S $USER && adduser -S $USER -G $USER \
-    && echo "@testing https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
-    # https://gitlab.alpinelinux.org/alpine/aports/-/issues/11768
-    && sed -i -e 's/https/http/' /etc/apk/repositories \
-    # Add packages
-    && apk add --no-cache ${APK_ADD} \
-    && apk del --no-cache ${APK_DEL} \
-    # Cleanup: Remove files
-    && rm -rf \
-      /usr/share/man/* \
-      /usr/includes/* \
-      /var/cache/apk/* \
+RUN apk add -X https://dl-cdn.alpinelinux.org/alpine/v3.18/main -u alpine-keys --allow-untrusted
 
-    # Add latest webdriver-util script for firefox automation
-    && wget -P /usr/local/bin https://raw.githubusercontent.com/bbusse/webdriver-util/main/webdriver_util.py \
-    && chmod +x /usr/local/bin/webdriver_util.py \
-    && wget -O /tmp/requirements_webdriver.txt https://raw.githubusercontent.com/bbusse/webdriver-util/main/requirements.txt \
+RUN echo $'http://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories \
+    && echo $'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories \
+    && apk update \
+    && apk upgrade \
+    && apk add --no-cache $APK_ADD
 
-    && git clone -b dev https://github.com/bbusse/python-wayland /usr/local/src/python-wayland \
+RUN mkdir -p /usr/local/src/waystream
+COPY . /usr/local/src/waystream
+RUN cd /usr/local/src/waystream && cargo build --release
 
-    # Add iss-display-controller for view handling
-    && wget -P /usr/local/bin https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/controller.py \
-    && chmod +x /usr/local/bin/controller.py \
-    && wget -O /tmp/requirements_controller.txt https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/requirements.txt \
+# Add application user
+RUN addgroup -S $USER && adduser -S $USER -G $USER
 
-    # Run controller.py
-    && echo "exec controller.py --uri="iss-weather://" --stream-source=vnc-browser --debug=$DEBUG" >> /etc/sway/config.d/firefox
-
+# Add entrypoint
 USER $USER
-
-RUN pip3 install --user -r /tmp/requirements_controller.txt
-RUN pip3 install --user -r /tmp/requirements_webdriver.txt
-
-COPY entrypoint.sh /
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["waystream"]
