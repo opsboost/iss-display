@@ -40,7 +40,7 @@ jobs:
         platforms: linux/arm64, linux/amd64
         file: Containerfile
         push: true
-        tags: ghcr.io/bbusse/swayvnc-firefox:latest
+        tags: ghcr.io/opsboost/iss-display:latest
 
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
