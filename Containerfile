@@ -1,14 +1,15 @@
 ARG SWAYVNC_VERSION=latest
 FROM ghcr.io/bbusse/swayvnc:${SWAYVNC_VERSION}
 LABEL maintainer="Björn Busse <bj.rn@baerlin.eu>"
-LABEL org.opencontainers.image.source https://github.com/bbusse/swayvnc-firefox
-
-ENV ARCH="x86_64" \
-    USER="firefox-user" \
-    APK_ADD="libc-dev libffi-dev libxkbcommon-dev gcc geckodriver@testing git python3 python3-dev py3-pip py3-wheel firefox" \
-    APK_DEL=""
+LABEL org.opencontainers.image.source https://github.com/opsboost/iss-display
 
 USER root
+
+COPY --from=ghcr.io/bbusse/waystream-build:latest /usr/local/src/waystream/target/release/waystream /usr/local/bin/
+
+ENV USER="iss-display" \
+    APK_ADD="libc-dev libffi-dev libxkbcommon-dev gcc geckodriver@testing git python3 python3-dev py3-pip py3-wheel firefox" \
+    APK_DEL=""
 
 # Add application user and application
 # Cleanup: Remove files and users
