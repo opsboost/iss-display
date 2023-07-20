@@ -8,12 +8,11 @@ USER root
 COPY --from=ghcr.io/bbusse/waystream-build:latest /usr/local/src/waystream/target/release/waystream /usr/local/bin/
 
 ENV USER="iss-display" \
-    APK_ADD="libc-dev libffi-dev libxkbcommon-dev gcc geckodriver@testing git python3 python3-dev py3-pip py3-wheel firefox" \
+    APK_ADD="libc-dev libffi-dev libxkbcommon-dev gcc gcompat geckodriver@testing git gst-plugins-rs python3 python3-dev py3-pip py3-wheel firefox" \
     APK_DEL=""
 
-# Add application user and application
-# Cleanup: Remove files and users
-RUN addgroup -S $USER && adduser -S $USER -G $USER \
+RUN echo $'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories \
+    && addgroup -S $USER && adduser -S $USER -G $USER \
     && echo "@testing https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
     # https://gitlab.alpinelinux.org/alpine/aports/-/issues/11768
     && sed -i -e 's/https/http/' /etc/apk/repositories \
