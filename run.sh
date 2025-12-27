@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-export CONTAINER=swayvnc-firefox
+export CONTAINER=iss-display
 readonly CONTAINER
 export LISTEN_ADDRESS="[::1]"
 readonly LISTEN_ADDRESS
