@@ -1,18 +1,35 @@
 ARG SWAYVNC_VERSION=latest
 FROM ghcr.io/bbusse/swayvnc:${SWAYVNC_VERSION}
 LABEL maintainer="Björn Busse <bj.rn@baerlin.eu>"
-LABEL org.opencontainers.image.source https://github.com/opsboost/iss-display
-
-USER root
+LABEL org.opencontainers.image.source=https://github.com/bbusse/swayvnc-firefox
 
 COPY --from=ghcr.io/bbusse/waystream-build:latest /usr/local/src/waystream/target/release/waystream /usr/local/bin/
 
-ENV USER="iss-display" \
-    APK_ADD="libc-dev libffi-dev libxkbcommon-dev gcc gcompat geckodriver@testing git gst-plugins-rs python3 python3-dev py3-pip py3-wheel firefox" \
-    APK_DEL=""
+ENV ARCH="x86_64" \
+    USER="swayvnc" \
+    APK_ADD="libc-dev \
+             libffi-dev \
+             libxkbcommon-dev \
+             file \
+             gcc \
+             geckodriver@testing \
+             git \
+             grim \
+             python3 \
+             python3-dev \
+             py3-pip \
+             py3-wheel \
+             firefox \
+             wayland-dev \
+             wayland-protocols" \
+    APK_DEL="" \
+    PATH_VENV="/home/swayvnc/venv"
 
-RUN echo $'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories \
-    && addgroup -S $USER && adduser -S $USER -G $USER \
+USER root
+
+# Add application user and application
+# Cleanup: Remove files and users
+RUN addgroup -S $USER && adduser -S $USER -G $USER \
     && echo "@testing https://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
     # https://gitlab.alpinelinux.org/alpine/aports/-/issues/11768
     && sed -i -e 's/https/http/' /etc/apk/repositories \
@@ -30,20 +47,28 @@ RUN echo $'http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/reposi
     && chmod +x /usr/local/bin/webdriver_util.py \
     && wget -O /tmp/requirements_webdriver.txt https://raw.githubusercontent.com/bbusse/webdriver-util/main/requirements.txt \
 
-    && git clone -b dev https://github.com/bbusse/python-wayland /usr/local/src/python-wayland \
+    && git clone --single-branch -b dev --depth 1 https://github.com/bbusse/python-wayland /usr/local/src/python-wayland \
 
     # Add iss-display-controller for view handling
-    && wget -P /usr/local/bin https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/controller.py \
-    && chmod +x /usr/local/bin/controller.py \
+    #&& wget -P /usr/local/bin https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/controller.py \
+    #&& chmod +x /usr/local/bin/controller.py \
     && wget -O /tmp/requirements_controller.txt https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/requirements.txt \
 
-    # Run controller.py
-    && echo "exec controller.py --uri="iss-weather://" --stream-source=vnc-browser --debug=$DEBUG" >> /etc/sway/config.d/firefox
+    # Configure controller.py startup
+    && echo "exec /usr/bin/env sh -c 'source ${PATH_VENV}/bin/activate && controller.py --stream-source=vnc-browser --loglevel=DEBUG'" \
+    > /etc/sway/config.d/firefox \
+
+    # Disable Xwayland explicitly
+    && echo "xwayland disable" > /etc/sway/config.d/xwayland
 
 USER $USER
 
-RUN pip3 install --user -r /tmp/requirements_controller.txt
-RUN pip3 install --user -r /tmp/requirements_webdriver.txt
+RUN mkdir -p ${PATH_VENV} && \
+    python3 -m venv /home/swayvnc/venv && \
+    . ${PATH_VENV}/bin/activate && \
+    pip3 install -r /tmp/requirements_controller.txt && \
+    pip3 install -r /tmp/requirements_webdriver.txt && \
+    deactivate
 
 COPY entrypoint.sh /
 ENTRYPOINT ["/entrypoint.sh"]
