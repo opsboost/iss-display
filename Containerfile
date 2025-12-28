@@ -50,8 +50,8 @@ RUN addgroup -S $USER && adduser -S $USER -G $USER \
     && git clone --single-branch -b dev --depth 1 https://github.com/bbusse/python-wayland /usr/local/src/python-wayland \
 
     # Add iss-display-controller for view handling
-    #&& wget -P /usr/local/bin https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/controller.py \
-    #&& chmod +x /usr/local/bin/controller.py \
+    && wget -P /usr/local/bin https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/controller.py \
+    && chmod +x /usr/local/bin/controller.py \
     && wget -O /tmp/requirements_controller.txt https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/requirements.txt \
 
     # Configure controller.py startup
