@@ -8,9 +8,9 @@ export LISTEN_ADDRESS="[::1]"
 readonly LISTEN_ADDRESS
 export VERBOSE=1
 readonly VERBOSE
-export DEFAULT_URL="https://uhr.ptb.de/"
-readonly DEFAULT_URL
-SCRIPT_NAME=$(basename $0)
+export DEFAULT_URIS="|iss-apod://|iss-cal://|iss-system://|iss-network://|iss-weather://|https://bbusse.github.io/analog-digital-clock/"
+readonly DEFAULT_URIS
+SCRIPT_NAME=$(basename "$0")
 readonly SCRIPT_NAME
 
 
@@ -19,16 +19,16 @@ log() {
         echo "$@" >&2
     fi
 
-    logger -p user.notice -t ${SCRIPT_NAME} "$@"
+    logger -p user.notice -t "${SCRIPT_NAME}" "$@"
 }
 
 error() {
     echo "$@" >&2
-    logger -p user.error -t ${SCRIPT_NAME} "$@"
+    logger -p user.error -t "${SCRIPT_NAME}" "$@"
 }
 
-if [[ -z $(which podman) ]]; then
-    if [[ -z $(which docker) ]]; then
+if [[ -z $(command -v podman) ]]; then
+    if [[ -z $(command -v docker) ]]; then
         error "Could not find container executor."
         error "Install either podman or docker"
         exit 1
@@ -46,9 +46,12 @@ ${executor} run -e XDG_RUNTIME_DIR=/tmp \
                 -e WLR_LIBINPUT_NO_DEVICES=1 \
                 -e SWAYSOCK=/tmp/sway-ipc.sock \
                 -e MOZ_ENABLE_WAYLAND=1 \
-                -e URL="${DEFAULT_URL}" \
                 -e BROWSER_FULLSCREEN=1 \
+                -e URI=${DEFAULT_URIS} \
+                -e UPDATE_CONTROLLER=0 \
+                -e LOGLEVEL=DEBUG \
                 -p${LISTEN_ADDRESS}:5910:5910 \
+                -p${LISTEN_ADDRESS}:5000:5000 \
                 -p${LISTEN_ADDRESS}:7000:7000 \
                 -p${LISTEN_ADDRESS}:7023:7023 \
                 --privileged \
