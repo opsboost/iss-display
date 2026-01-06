@@ -2,13 +2,14 @@
 
 set -euo pipefail
 
-export CONTAINER=iss-display
+export CONTAINER=localhost/iss-display
 readonly CONTAINER
 export LISTEN_ADDRESS="[::1]"
 readonly LISTEN_ADDRESS
 export VERBOSE=1
 readonly VERBOSE
-export DEFAULT_URIS="|iss-apod://|iss-cal://|iss-system://|iss-network://|iss-weather://|https://bbusse.github.io/analog-digital-clock/"
+#export DEFAULT_URIS="|iss-apod://|iss-cal://|iss-system://|iss-network://|iss-weather://|https://bbusse.github.io/analog-digital-clock/"
+export DEFAULT_URIS="|iss-apod://|iss-cal://|iss-system://|iss-network://|https://bbusse.github.io/analog-digital-clock/"
 readonly DEFAULT_URIS
 SCRIPT_NAME=$(basename "$0")
 readonly SCRIPT_NAME
@@ -51,7 +52,7 @@ ${executor} run -e XDG_RUNTIME_DIR=/tmp \
                 -e UPDATE_CONTROLLER=0 \
                 -e LOGLEVEL=DEBUG \
                 -p${LISTEN_ADDRESS}:5910:5910 \
-                -p${LISTEN_ADDRESS}:5000:5000 \
+                -p${LISTEN_ADDRESS}:6000:6000 \
                 -p${LISTEN_ADDRESS}:7000:7000 \
                 -p${LISTEN_ADDRESS}:7023:7023 \
                 --privileged \
