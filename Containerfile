@@ -5,25 +5,22 @@ LABEL org.opencontainers.image.source=https://github.com/bbusse/swayvnc-firefox
 
 COPY --from=ghcr.io/bbusse/waystream-build:latest /usr/local/src/waystream/target/release/waystream /usr/local/bin/
 
-ENV ARCH="x86_64" \
-    USER="swayvnc" \
-    APK_ADD="libc-dev \
-             libffi-dev \
-             libxkbcommon-dev \
+ENV USER="swayvnc" \
+    APK_ADD="libxkbcommon-dev \
              file \
-             gcc \
              geckodriver@testing \
              git \
              grim \
-             python3 \
-             python3-dev \
-             py3-pip \
-             py3-wheel \
              firefox \
              wayland-dev \
              wayland-protocols" \
     APK_DEL="" \
-    PATH_VENV="/home/swayvnc/venv"
+    PATH_VENV="/venv" \
+    PATH="${PATH_VENV}/bin:${PATH}" \
+    # Ensure Selenium uses system geckodriver on PATH
+    SE_DISABLE_DRIVER_MANAGEMENT="1" \
+    GECKODRIVER="/usr/bin/geckodriver" \
+    FIREFOX_BIN="/usr/bin/firefox"
 
 USER root
 
@@ -42,33 +39,21 @@ RUN addgroup -S $USER && adduser -S $USER -G $USER \
       /usr/includes/* \
       /var/cache/apk/* \
 
-    # Add latest webdriver-util script for firefox automation
-    && wget -P /usr/local/bin https://raw.githubusercontent.com/bbusse/webdriver-util/main/webdriver_util.py \
-    && chmod +x /usr/local/bin/webdriver_util.py \
-    && wget -O /tmp/requirements_webdriver.txt https://raw.githubusercontent.com/bbusse/webdriver-util/main/requirements.txt \
-
     && git clone --single-branch -b dev --depth 1 https://github.com/bbusse/python-wayland /usr/local/src/python-wayland \
 
-    # Add iss-display-controller for view handling
-    && wget -P /usr/local/bin https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/controller.py \
-    && chmod +x /usr/local/bin/controller.py \
-    && wget -O /tmp/requirements_controller.txt https://raw.githubusercontent.com/OpsBoost/iss-display-controller/dev/requirements.txt \
-
     # Configure controller.py startup
-    && echo "exec /usr/bin/env sh -c 'source ${PATH_VENV}/bin/activate && controller.py --stream-source=vnc-browser --loglevel=DEBUG'" \
+    && echo "exec /usr/bin/env sh -c 'PATH=/home/swayvnc/venv-controller/bin/:$PATH source ${PATH_VENV}/bin/activate && controller.py --stream-source=vnc-browser --loglevel=DEBUG'" \
     > /etc/sway/config.d/firefox \
 
     # Disable Xwayland explicitly
     && echo "xwayland disable" > /etc/sway/config.d/xwayland
 
-USER $USER
-
-RUN mkdir -p ${PATH_VENV} && \
-    python3 -m venv /home/swayvnc/venv && \
-    . ${PATH_VENV}/bin/activate && \
-    pip3 install -r /tmp/requirements_controller.txt && \
-    pip3 install -r /tmp/requirements_webdriver.txt && \
-    deactivate
+USER root
+# Copy controller virtual environment from external image
+COPY --from=ghcr.io/opsboost/iss-display-controller:latest /venv "${PATH_VENV}"
+# Use local controller for debugging
+COPY controller.py /usr/local/bin/
+RUN chmod +x /usr/local/bin/controller.py
 
 COPY entrypoint.sh /
 ENTRYPOINT ["/entrypoint.sh"]
