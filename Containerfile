@@ -3,13 +3,10 @@ FROM ghcr.io/bbusse/swayvnc:${SWAYVNC_VERSION}
 LABEL maintainer="Björn Busse <bj.rn@baerlin.eu>"
 LABEL org.opencontainers.image.source=https://github.com/bbusse/swayvnc-firefox
 
-COPY --from=ghcr.io/bbusse/waystream-build:latest /usr/local/src/waystream/target/release/waystream /usr/local/bin/
-
 ENV USER="swayvnc" \
     APK_ADD="libxkbcommon-dev \
              file \
              geckodriver@testing \
-             git \
              grim \
              firefox \
              wayland-dev \
@@ -17,8 +14,6 @@ ENV USER="swayvnc" \
     APK_DEL="" \
     PATH_VENV="/venv" \
     PATH="${PATH_VENV}/bin:${PATH}" \
-    # Ensure Selenium uses system geckodriver on PATH
-    SE_DISABLE_DRIVER_MANAGEMENT="1" \
     GECKODRIVER="/usr/bin/geckodriver" \
     FIREFOX_BIN="/usr/bin/firefox"
 
@@ -39,11 +34,9 @@ RUN addgroup -S $USER && adduser -S $USER -G $USER \
       /usr/includes/* \
       /var/cache/apk/* \
 
-    && git clone --single-branch -b dev --depth 1 https://github.com/bbusse/python-wayland /usr/local/src/python-wayland \
-
     # Configure controller.py startup
     && echo "exec /usr/bin/env sh -c 'PATH=/home/swayvnc/venv-controller/bin/:$PATH source ${PATH_VENV}/bin/activate && controller.py --stream-source=vnc-browser --loglevel=DEBUG'" \
-    > /etc/sway/config.d/firefox \
+    > /etc/sway/config.d/controller \
 
     # Disable Xwayland explicitly
     && echo "xwayland disable" > /etc/sway/config.d/xwayland
@@ -51,9 +44,7 @@ RUN addgroup -S $USER && adduser -S $USER -G $USER \
 USER root
 # Copy controller virtual environment from external image
 COPY --from=ghcr.io/opsboost/iss-display-controller:latest /venv "${PATH_VENV}"
-# Use local controller for debugging
-COPY controller.py /usr/local/bin/
-RUN chmod +x /usr/local/bin/controller.py
+COPY --from=ghcr.io/opsboost/iss-display-controller:latest /controller/controller.py /usr/local/bin/controller.py
 
 COPY entrypoint.sh /
 ENTRYPOINT ["/entrypoint.sh"]
