@@ -8,11 +8,14 @@ export LISTEN_ADDRESS="[::1]"
 readonly LISTEN_ADDRESS
 export VERBOSE=1
 readonly VERBOSE
-#export DEFAULT_URIS="|iss-apod://|iss-cal://|iss-system://|iss-network://|iss-weather://|https://bbusse.github.io/analog-digital-clock/"
-export DEFAULT_URIS="|iss-apod://|iss-cal://|iss-system://|iss-network://|https://bbusse.github.io/analog-digital-clock/"
+export DEFAULT_URIS="iss://apod?t=10|iss://cal?t=10|iss://system?t=10|iss://network?t=10|iss://proc?t=10|iss://playlist?t=10|iss://weather?t=10|https://news.ycombinator.com/rss?t=10|https://kite.kagi.com/world.xml?t=10|https://feeds.bbci.co.uk/news/rss.xml?t=10|https://bbusse.github.io/analog-digital-clock/?t=10"
 readonly DEFAULT_URIS
+export APOD_API_KEY="${APOD_API_KEY:-DEMO_KEY}"
+readonly APOD_API_KEY
 SCRIPT_NAME=$(basename "$0")
 readonly SCRIPT_NAME
+COMMAND="${1:-run}"
+readonly COMMAND
 
 
 log() {
@@ -35,25 +38,51 @@ if [[ -z $(command -v podman) ]]; then
         exit 1
     else
         executor=docker
-        log "Using ${executor} to run ${CONTAINER}"
     fi
 else
     executor=podman
-    log "Using ${executor} to run ${CONTAINER}"
 fi
 
-${executor} run -e XDG_RUNTIME_DIR=/tmp \
-                -e WLR_BACKENDS=headless \
-                -e WLR_LIBINPUT_NO_DEVICES=1 \
-                -e SWAYSOCK=/tmp/sway-ipc.sock \
-                -e MOZ_ENABLE_WAYLAND=1 \
-                -e BROWSER_FULLSCREEN=1 \
-                -e URI=${DEFAULT_URIS} \
-                -e UPDATE_CONTROLLER=0 \
-                -e LOGLEVEL=DEBUG \
-                -p${LISTEN_ADDRESS}:5910:5910 \
-                -p${LISTEN_ADDRESS}:6000:6000 \
-                -p${LISTEN_ADDRESS}:7000:7000 \
-                -p${LISTEN_ADDRESS}:7023:7023 \
-                --privileged \
-                ${CONTAINER}
+stop_running() {
+    local running
+    running=$(${executor} ps --filter "ancestor=${CONTAINER}" --format "{{.ID}}")
+    if [[ -n "${running}" ]]; then
+        log "Stopping running ${CONTAINER} (${running})"
+        ${executor} rm -f ${running}
+    fi
+}
+
+case "${COMMAND}" in
+    build)
+        log "Building iss-display with ${executor}"
+        ${executor} build -t iss-display -f Containerfile .
+        ;;
+    run)
+        stop_running
+        log "Using ${executor} to run ${CONTAINER}"
+        ${executor} run -e XDG_RUNTIME_DIR=/tmp \
+                        -e WLR_BACKENDS=headless \
+                        -e WLR_LIBINPUT_NO_DEVICES=1 \
+                        -e SWAYSOCK=/tmp/sway-ipc.sock \
+                        -e MOZ_ENABLE_WAYLAND=1 \
+                        -e MOZ_DISABLE_GPU_PROCESS=1 \
+                        -e MOZ_WEBRENDER=0 \
+                        -e BROWSER_FULLSCREEN=1 \
+                        -e URI=${DEFAULT_URIS} \
+                        -e APOD_API_KEY=${APOD_API_KEY} \
+                        -e UPDATE_CONTROLLER=0 \
+                        -e LOGLEVEL=DEBUG \
+                        -p${LISTEN_ADDRESS}:5910:5910 \
+                        -p${LISTEN_ADDRESS}:6000:6000 \
+                        -p${LISTEN_ADDRESS}:7000:7000 \
+                        -p${LISTEN_ADDRESS}:7001:7001 \
+                        -p${LISTEN_ADDRESS}:7023:7023 \
+                        --privileged \
+                        ${CONTAINER}
+        ;;
+    *)
+        error "Unknown command: ${COMMAND}"
+        error "Usage: ${SCRIPT_NAME} [build|run]"
+        exit 1
+        ;;
+esac
