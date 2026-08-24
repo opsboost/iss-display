@@ -11,7 +11,8 @@ case "$1" in
         set -- "$@"
     ;;
     *)
-        set -- sway
+        set -- /venv/bin/python3 /usr/local/bin/controller.py \
+               --stream-source=vnc-browser --loglevel="${LOGLEVEL:-INFO}"
     ;;
 esac
 

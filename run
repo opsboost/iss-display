@@ -8,10 +8,15 @@ export LISTEN_ADDRESS="[::1]"
 readonly LISTEN_ADDRESS
 export VERBOSE=1
 readonly VERBOSE
-export DEFAULT_URIS="iss://apod?t=10|iss://cal?t=10|iss://system?t=10|iss://network?t=10|iss://proc?t=10|iss://playlist?t=10|iss://weather?t=10|https://news.ycombinator.com/rss?t=10|https://kite.kagi.com/world.xml?t=10|https://feeds.bbci.co.uk/news/rss.xml?t=10|https://bbusse.github.io/analog-digital-clock/?t=10"
+export DEFAULT_URIS="iss://date|iss://top?t=20|iss://apod?t=10|iss://cal?t=10|iss://system?t=10|iss://network?t=10|iss://proc?t=10|iss://playlist?t=10|iss://weather?t=10|https://news.ycombinator.com/rss?t=10|https://kite.kagi.com/world.xml?t=10|https://feeds.bbci.co.uk/news/rss.xml?t=10|https://bbusse.github.io/analog-digital-clock/?t=10"
 readonly DEFAULT_URIS
 export APOD_API_KEY="${APOD_API_KEY:-DEMO_KEY}"
 readonly APOD_API_KEY
+# Park windows we do not draw ourselves on an output of their own, so they
+# keep rendering while off screen. Every output is composited continuously,
+# which costs real time on a software renderer, so this is off by default
+export HOLD_OUTPUTS="${HOLD_OUTPUTS:-0}"
+readonly HOLD_OUTPUTS
 SCRIPT_NAME=$(basename "$0")
 readonly SCRIPT_NAME
 COMMAND="${1:-run}"
@@ -68,6 +73,7 @@ case "${COMMAND}" in
                         -e MOZ_DISABLE_GPU_PROCESS=1 \
                         -e MOZ_WEBRENDER=0 \
                         -e BROWSER_FULLSCREEN=1 \
+                        -e HOLD_OUTPUTS=${HOLD_OUTPUTS} \
                         -e URI=${DEFAULT_URIS} \
                         -e APOD_API_KEY=${APOD_API_KEY} \
                         -e UPDATE_CONTROLLER=0 \
