@@ -474,7 +474,8 @@ install_tray() {
 case "${COMMAND}" in
     build)
         log "Building iss-display with ${executor}"
-        ${executor} build -t iss-display -f Containerfile .
+        ${executor} build -t iss-display -f Containerfile \
+            --build-arg CONTROLLER_IMAGE=localhost/iss-display-controller:latest .
         ;;
     _run_container)
         run_container

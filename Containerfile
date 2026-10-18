@@ -12,6 +12,7 @@ ARG GST_MOONSHINE_PKGVER=1.28.3-r6
 ARG WAYVNC_MOONSHINE_PKGVER=0.10.0-r0
 ARG SERVO_VERSION=0.5.0_rc1
 ARG SERVO_PKGREL=0
+ARG CONTROLLER_IMAGE=ghcr.io/opsboost/iss-display-controller:latest
 
 FROM docker.io/library/alpine:${ALPINE_TAG} AS fetch
 RUN <<'SCRIPT'
@@ -120,6 +121,8 @@ fetch /packages/scream.apk \
     "https://github.com/bbusse/scream/releases/download/${SCREAM_VERSION}/scream-${SCREAM_PKGVER}.$(apk --print-arch)-${SCREAM_VERSION}.apk"
 SCRIPT
 
+FROM ${CONTROLLER_IMAGE} AS controller
+
 FROM ghcr.io/bbusse/moonshine-sway-web:${MOONSHINE_SWAY_WEB_VERSION}
 ARG VJU_FLAVOUR
 LABEL maintainer="Björn Busse <bj.rn@baerlin.eu>"
@@ -197,8 +200,8 @@ USER root
 # first import, so the venv has to be writable by the account the controller
 # runs as, and --chown does that in the copy rather than in a second layer
 # that would duplicate the venv's size
-COPY --chown=1000:1000 --from=iss-display-controller:latest /venv "${PATH_VENV}"
-COPY --from=iss-display-controller:latest /controller/controller.py /controller/render.py /usr/local/bin/
+COPY --chown=1000:1000 --from=controller /venv "${PATH_VENV}"
+COPY --from=controller /controller/controller.py /controller/render.py /usr/local/bin/
 
 # The named theme and playlist presets, read by the controller from beside
 # itself. Synced into this context
