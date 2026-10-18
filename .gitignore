@@ -1,2 +1,4 @@
 run_debug.sh
 controller.py
+/*.md
+!/README.md
