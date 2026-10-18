@@ -6,6 +6,11 @@ if [ ! -s /etc/machine-id ]; then
     printf '%s\n' "${uuid//-/}" > /etc/machine-id
 fi
 
+# The controller's WayvncServer owns wayvnc, with auth and a per-container
+# password. The image ships no sway exec line for it; clear any a config
+# drop-in adds so a second, unauthenticated instance never starts
+rm -f /etc/sway/config.d/wayvnc
+
 case "$1" in
     sh|bash)
         set -- "$@"
