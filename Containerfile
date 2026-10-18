@@ -198,10 +198,10 @@ USER root
 # runs as, and --chown does that in the copy rather than in a second layer
 # that would duplicate the venv's size
 COPY --chown=1000:1000 --from=iss-display-controller:latest /venv "${PATH_VENV}"
-COPY --from=iss-display-controller:latest /controller/controller.py /usr/local/bin/controller.py
+COPY --from=iss-display-controller:latest /controller/controller.py /controller/render.py /usr/local/bin/
 
 # The named theme and playlist presets, read by the controller from beside
-# itself. Synced into this context next to controller.py
+# itself. Synced into this context
 COPY themes.toml playlists.toml /usr/local/bin/
 
 # py3status probes for i3 with pgrep before doing anything and dies without
