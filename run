@@ -2,24 +2,165 @@
 
 set -euo pipefail
 
+host_network_address() {
+    local ip=""
+    if command -v ip >/dev/null 2>&1; then
+        ip=$(ip -4 -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+    fi
+    if [[ -z "${ip}" ]] && command -v route >/dev/null 2>&1; then
+        local dev
+        dev=$(route -n get 1.1.1.1 2>/dev/null | awk '/interface:/{print $2}')
+        if [[ -n "${dev}" ]] && command -v ipconfig >/dev/null 2>&1; then
+            ip=$(ipconfig getifaddr "${dev}" 2>/dev/null || true)
+        fi
+    fi
+    printf '%s' "${ip}"
+}
+
 export CONTAINER=localhost/iss-display
 readonly CONTAINER
 export LISTEN_ADDRESS="[::1]"
 readonly LISTEN_ADDRESS
+# scream's rtsp and http stream ports. Unlike the web ui and vnc they carry no
+# auth and are meant for players and dlna clients on the LAN, so they publish
+# on every interface by default. Narrow it if that is too open
+export STREAM_ADDRESS="${STREAM_ADDRESS:-0.0.0.0}"
+readonly STREAM_ADDRESS
+# The web interface, json api and /metrics, published on the host at
+# [::1]:7000
+export LISTEN_PORT="${LISTEN_PORT:-7000}"
+readonly LISTEN_PORT
+# The controller's udp state socket, published on the host at [::1]:7042.
+# It binds this address inside the container, so leave it off loopback or
+# the published port cannot reach it
+export DISPLAY_STATE_UDP_HOST="${DISPLAY_STATE_UDP_HOST:-0.0.0.0}"
+readonly DISPLAY_STATE_UDP_HOST
 export VERBOSE=1
 readonly VERBOSE
-export DEFAULT_URIS="iss://date|iss://top?t=20|iss://apod?t=10|iss://cal?t=10|iss://system?t=10|iss://network?t=10|iss://proc?t=10|iss://playlist?t=10|iss://weather?t=10|https://news.ycombinator.com/rss?t=10|https://kite.kagi.com/world.xml?t=10|https://feeds.bbci.co.uk/news/rss.xml?t=10|https://bbusse.github.io/analog-digital-clock/?t=10"
-readonly DEFAULT_URIS
+# The playlist, a pipe-separated list of iss:// and http(s):// uris. Override
+# by exporting PLAYLIST before running. A double bar splits it into a pinned
+# view and a cycling set: "pinned||a|b|c" pins the first view full size and
+# cycles the rest in a small corner window, "a|b|c||pinned" cycles a, b, c
+# full size and pins the last view in the corner
+export PLAYLIST="${PLAYLIST:-\
+iss://system/top?t=20|\
+iss://network/traceroute?t=20&refresh=300|\
+iss://apod?t=10|iss://onthisday?t=10|\
+iss://music?t=10|iss://calendar?t=10|\
+iss://system/internals?t=10|\
+iss://network?t=10|\
+iss://network/sockets?t=10|\
+iss://network/neighbours?t=10|\
+iss://system/processes?t=10|\
+https://bbusse.github.io/humanbeans-clock/?t=60|\
+iss://playlist?t=10|\
+iss://prometheus/localhost:${LISTEN_PORT}/metrics/iss_display_http_requests_total?t=10|\
+iss://weather?t=10|iss://art/ngoa?t=15|iss://art/mmoa?t=15|\
+iss://system/dirsizes?t=10|\
+iss://system/filesizes?t=10|\
+iss://log/20|\
+iss://bluesky/@financialtimes.com?t=12|\
+iss://bluesky/@redditspaceviewes.bsky.social|\
+iss://bluesky/@https://bsky.app/profile/hnwiki.bsky.social|\
+https://news.ycombinator.com/rss?t=10|\
+https://kite.kagi.com/world.xml?t=10|\
+https://feeds.bbci.co.uk/news/rss.xml?t=10|\
+https://bbusse.github.io/analog-digital-clock/?t=10||\
+https://raw.githubusercontent.com/jnk22/kodinerds-iptv/master/iptv/clean/clean_tv.m3u}"
+readonly PLAYLIST
+# The small pip view's fraction of the output, and which corner it sits in
+# (also lower-left, upper-right, upper-left)
+export RELATIVE_PIP_SIZE="${RELATIVE_PIP_SIZE:-0.25}"
+readonly RELATIVE_PIP_SIZE
+export PIP_POSITION="${PIP_POSITION:-lower-right}"
+readonly PIP_POSITION
+# The theme the display draws with, a table in themes.toml. The tmux status
+# line takes its colours from the same table
+export THEME="${THEME:-infinit}"
+readonly THEME
 export APOD_API_KEY="${APOD_API_KEY:-DEMO_KEY}"
 readonly APOD_API_KEY
-# Park windows we do not draw ourselves on an output of their own, so they
-# keep rendering while off screen. Every output is composited continuously,
-# which costs real time on a software renderer, so this is off by default
+export TRACEROUTE_TARGET="${TRACEROUTE_TARGET:-}"
+readonly TRACEROUTE_TARGET
+# Host or IP the System and Network views probe to learn which local
+# interface faces the internet. Nothing is sent. A UDP socket is connected
+# toward it and its source address read back
+export PROBE_IP_ADDRESS="${PROBE_IP_ADDRESS:-x.org}"
+readonly PROBE_IP_ADDRESS
+# The image is UTC unless told otherwise. Default to the host's zone so the
+# date and calendar views read like the wall clock; override with an IANA
+# name, TZ=Europe/Berlin. An unknown name silently falls back to UTC
+export TZ="${TZ:-$( \
+    { l=$(readlink /etc/localtime 2>/dev/null) && printf '%s' "${l##*/zoneinfo/}"; } \
+    || { [ -r /etc/timezone ] && cat /etc/timezone; } \
+    || printf 'UTC' )}"
+readonly TZ
+# Draw a dot per playlist item at the bottom of every view we render
+# ourselves, the current one filled
+export VIEW_INDICATOR="${VIEW_INDICATOR:-1}"
+readonly VIEW_INDICATOR
+# A view whose source has nothing on its first fetch is not shown at all,
+# just a warning in the log. 0 shows a placeholder view instead
+export OMIT_NO_DATA_VIEWS="${OMIT_NO_DATA_VIEWS:-1}"
+readonly OMIT_NO_DATA_VIEWS
 export HOLD_OUTPUTS="${HOLD_OUTPUTS:-0}"
 readonly HOLD_OUTPUTS
+# The controller starts wayvnc with auth on, bound to 0.0.0.0 inside the
+# container and published on the host at [::1]:5900 (LISTEN_ADDRESS below).
+# The connect secret is printed once on start. WAYVNC_PASSWORD overrides the
+# generated password, WAYVNC_USERNAME the default 'iss'
+export VNC_PORT="${VNC_PORT:-5900}"
+readonly VNC_PORT
+export WAYVNC_USERNAME="${WAYVNC_USERNAME:-}"
+readonly WAYVNC_USERNAME
+export WAYVNC_PASSWORD="${WAYVNC_PASSWORD:-}"
+readonly WAYVNC_PASSWORD
+# What scream calls the stream: RTSP SDP session name, WebM/Matroska title,
+# and the DLNA listing name
+export STREAM_TITLE="${STREAM_TITLE:-ISS Display}"
+readonly STREAM_TITLE
+# Run a `scream --ssdp-relay-server` container on the host and tunnel the
+# panel's ssdp through it, so dlna discovery works even where container
+# multicast cannot reach the LAN. On by default. SSDP_RELAY=0 turns it off and
+# lets scream speak multicast directly
+export SSDP_RELAY="${SSDP_RELAY:-1}"
+readonly SSDP_RELAY
+readonly RELAY_NAME="${CONTAINER##*/}-ssdp-relay"
+# Where the panel's scream tunnels its ssdp. Points at the relay container,
+# reachable from the panel as host.containers.internal. Blank when the relay
+# is off
+if [[ "${SSDP_RELAY}" == "1" ]]; then
+    export STREAM_SSDP_RELAY="${STREAM_SSDP_RELAY:-host.containers.internal:1901}"
+else
+    export STREAM_SSDP_RELAY=""
+fi
+readonly STREAM_SSDP_RELAY
+if [[ -z "${STREAM_ADVERTISE_URL:-}" ]]; then
+    network_address=$(host_network_address)
+    [[ -n "${network_address}" ]] && STREAM_ADVERTISE_URL="http://${network_address}:7002"
+    unset network_address
+fi
+export STREAM_ADVERTISE_URL="${STREAM_ADVERTISE_URL:-}"
+readonly STREAM_ADVERTISE_URL
+export SPOTIFY_CLIENT_ID="${SPOTIFY_CLIENT_ID:-}"
+readonly SPOTIFY_CLIENT_ID
+export SPOTIFY_CLIENT_SECRET="${SPOTIFY_CLIENT_SECRET:-}"
+readonly SPOTIFY_CLIENT_SECRET
+export SPOTIFY_REFRESH_TOKEN="${SPOTIFY_REFRESH_TOKEN:-}"
+readonly SPOTIFY_REFRESH_TOKEN
+# INFO by default. DEBUG adds the per-message wayland protocol and drawing
+export LOGLEVEL="${LOGLEVEL:-INFO}"
+readonly LOGLEVEL
 SCRIPT_NAME=$(basename "$0")
 readonly SCRIPT_NAME
-COMMAND="${1:-run}"
+# Resolve symlinks so SCRIPT_PATH points into the repo
+SCRIPT_SOURCE=$0
+while [[ -L "${SCRIPT_SOURCE}" ]]; do
+    SCRIPT_SOURCE=$(readlink "${SCRIPT_SOURCE}")
+done
+SCRIPT_PATH=$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)/$(basename "${SCRIPT_SOURCE}")
+readonly SCRIPT_PATH
+COMMAND="${1:-}"
 readonly COMMAND
 
 
@@ -36,6 +177,10 @@ error() {
     logger -p user.error -t "${SCRIPT_NAME}" "$@"
 }
 
+if ! command -v podman >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
+    export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
+fi
+
 if [[ -z $(command -v podman) ]]; then
     if [[ -z $(command -v docker) ]]; then
         error "Could not find container executor."
@@ -48,13 +193,282 @@ else
     executor=podman
 fi
 
+# Panel containers from the image, the relay excluded by name. The relay runs
+# from the same image so a plain ancestor filter would sweep it up too
+panel_ids() {
+    ${executor} ps --filter "ancestor=${CONTAINER}" --format "{{.ID}} {{.Names}}" \
+        | awk -v r="${RELAY_NAME}" '$2 != r {print $1}'
+}
+
+running_container() {
+    panel_ids | head -1
+}
+
+# Start the ssdp relay container if it is enabled and not already up. Host
+# network so it reaches the real multicast group, scream entrypoint instead of
+# the controller
+start_ssdp_relay() {
+    [[ "${SSDP_RELAY}" == "1" ]] || return 0
+    if [[ -n "$(${executor} ps -q --filter "name=^${RELAY_NAME}$")" ]]; then
+        return 0
+    fi
+    ${executor} rm -f "${RELAY_NAME}" >/dev/null 2>&1 || true
+    log "Starting ssdp relay ${RELAY_NAME}"
+    ${executor} run -d --name "${RELAY_NAME}" --network host \
+                    --entrypoint scream "${CONTAINER}" \
+                    --ssdp-relay-server --ssdp-relay-listen 0.0.0.0:1901 >/dev/null
+}
+
+stop_ssdp_relay() {
+    ${executor} rm -f "${RELAY_NAME}" >/dev/null 2>&1 || true
+}
+
+run_container() {
+    ${executor} run -e XDG_RUNTIME_DIR=/tmp \
+                    -e WLR_BACKENDS=headless \
+                    -e WLR_LIBINPUT_NO_DEVICES=1 \
+                    -e SWAYSOCK=/tmp/sway-ipc.sock \
+                    -e HOLD_OUTPUTS=${HOLD_OUTPUTS} \
+                    -e URI=${PLAYLIST} \
+                    -e RELATIVE_PIP_SIZE=${RELATIVE_PIP_SIZE} \
+                    -e PIP_POSITION=${PIP_POSITION} \
+                    -e THEME=${THEME} \
+                    -e LISTEN_PORT=${LISTEN_PORT} \
+                    -e APOD_API_KEY=${APOD_API_KEY} \
+                    -e TRACEROUTE_TARGET=${TRACEROUTE_TARGET} \
+                    -e PROBE_IP_ADDRESS=${PROBE_IP_ADDRESS} \
+                    -e TZ=${TZ} \
+                    -e VIEW_INDICATOR=${VIEW_INDICATOR} \
+                    -e OMIT_NO_DATA_VIEWS=${OMIT_NO_DATA_VIEWS} \
+                    -e VNC_PORT=${VNC_PORT} \
+                    -e WAYVNC_USERNAME=${WAYVNC_USERNAME} \
+                    -e WAYVNC_PASSWORD=${WAYVNC_PASSWORD} \
+                    -e "STREAM_TITLE=${STREAM_TITLE}" \
+                    -e "STREAM_SSDP_RELAY=${STREAM_SSDP_RELAY}" \
+                    -e "STREAM_ADVERTISE_URL=${STREAM_ADVERTISE_URL}" \
+                    -e SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID} \
+                    -e SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET} \
+                    -e SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN} \
+                    -e LOGLEVEL=${LOGLEVEL} \
+                    -e DISPLAY_STATE_UDP_HOST=${DISPLAY_STATE_UDP_HOST} \
+                    -p${LISTEN_ADDRESS}:${VNC_PORT}:${VNC_PORT} \
+                    -p${LISTEN_ADDRESS}:${LISTEN_PORT}:${LISTEN_PORT} \
+                    -p${STREAM_ADDRESS}:7001:7001 \
+                    -p${STREAM_ADDRESS}:7002:7002 \
+                    -p${LISTEN_ADDRESS}:7042:7042/udp \
+                    ${CONTAINER}
+}
+
 stop_running() {
     local running
-    running=$(${executor} ps --filter "ancestor=${CONTAINER}" --format "{{.ID}}")
+    running=$(panel_ids)
     if [[ -n "${running}" ]]; then
         log "Stopping running ${CONTAINER} (${running})"
         ${executor} rm -f ${running}
     fi
+}
+
+# SIGTERM the running container and give it up to 10s to exit on its own, so
+# the controller tears wayvnc, scream and the compositor down and saves state
+# before it goes, then remove it. Returns as soon as the container is gone
+graceful_stop() {
+    local running
+    running=$(panel_ids)
+    if [[ -n "${running}" ]]; then
+        log "Stopping ${CONTAINER} (${running})"
+        ${executor} stop -t 10 ${running} >/dev/null 2>&1 || true
+        ${executor} rm -f ${running} >/dev/null 2>&1 || true
+    fi
+}
+
+# A colour of the display's theme, read from the themes.toml next to this
+# script. A missing file or key falls back to the controller's own default
+theme_colour() {
+    local key=$1 default=$2 value
+    value=$(awk -v table="[${THEME}]" -v key="${key}" '
+        $0 == table { found = 1; next }
+        /^\[/ { found = 0 }
+        found && $1 == key { gsub(/"/, "", $3); print $3; exit }
+    ' "$(dirname "${SCRIPT_PATH}")/themes.toml" 2>/dev/null)
+    echo "${value:-${default}}"
+}
+
+export_settings_to_tmux() {
+    local line name
+    while IFS= read -r line; do
+        [[ "${line}" == "declare -rx "* ]] || continue
+        name=${line#declare -rx }
+        name=${name%%=*}
+        tmux set-environment -t iss "${name}" "${!name}"
+    done < <(readonly -p)
+}
+
+# Already inside tmux: switch this client rather than nest an attach. On a
+# plain terminal: attach. If neither works, just say how to get there
+attach_iss() {
+    if [[ -n "${TMUX:-}" ]]; then
+        log "Switching this tmux client to session 'iss'"
+        tmux switch-client -t iss 2>/dev/null && return
+    elif [[ -t 1 ]]; then
+        log "Attaching to tmux session 'iss' (Ctrl-b d to detach)"
+        tmux attach -t iss && return
+    fi
+    log "tmux session 'iss' running, attach with: tmux attach -t iss"
+}
+
+# scream serves the panel as rtsp on 7001. Once the container is up and the
+# port answers, hand the url to the desktop to open a player
+open_stream() {
+    local host="${STREAM_ADDRESS}"
+    [[ "${host}" == "0.0.0.0" ]] && host="127.0.0.1"
+    local url="rtsp://${host}:7001/stream"
+
+    for _ in $(seq 1 30); do
+        if [[ -n $(running_container) ]]; then
+            if ! command -v nc >/dev/null 2>&1 || \
+               nc -z "${host}" 7001 2>/dev/null; then
+                log "Opening stream ${url}"
+                if command -v xdg-open >/dev/null 2>&1; then
+                    xdg-open "${url}"
+                elif command -v open >/dev/null 2>&1; then
+                    open "${url}"
+                else
+                    error "Found neither xdg-open nor open to start a player"
+                fi
+                return
+            fi
+        fi
+        sleep 2
+    done
+
+    error "Stream did not come up, not starting a player"
+}
+
+# Run the container inside a tmux session named "iss" when tmux is available,
+# so it survives a dropped ssh session and the logs stay scrollable. Falls
+# back to a plain foreground run otherwise. A running "iss" session is kept
+# and its window respawned with the fresh container rather than killed
+start_run() {
+    stop_running
+    start_ssdp_relay
+    log "Using ${executor} to run ${CONTAINER}"
+    open_stream &
+
+    if ! command -v tmux >/dev/null 2>&1; then
+        run_container
+        return
+    fi
+
+    if tmux has-session -t iss 2>/dev/null; then
+        log "Restarting the container in the existing tmux session 'iss'"
+    else
+        tmux new-session -d -s iss -n iss
+    fi
+    # Keep the window called "iss" rather than letting it follow the running
+    # command name
+    tmux set-option -w -t iss automatic-rename off 2>/dev/null || true
+    tmux rename-window -t iss iss 2>/dev/null || true
+    # The status line in the display's colours
+    tmux set-option -t iss status-style \
+        "bg=$(theme_colour bg_colour '#280f28'),fg=$(theme_colour font_colour '#ededed')"
+    # remain-on-exit=failed keeps the pane only when the container crashed, so
+    # its output stays readable. A clean stop closes the pane and the session
+    # with it. Older tmux has no "failed", there we keep the pane always
+    tmux set-option -t iss remain-on-exit failed 2>/dev/null \
+        || tmux set-option -t iss remain-on-exit on
+    export_settings_to_tmux
+    tmux respawn-window -k -t iss "exec '${SCRIPT_PATH}' _run_container"
+    attach_iss
+}
+
+# Graceful stop, then a fresh start in the same tmux session. Unlike a bare
+# run, which force-removes at once, this lets the controller shut down first
+restart_run() {
+    graceful_stop
+    start_run
+}
+
+# Stop the container and drop the tmux session, including a dead pane left
+# behind by a crash. Graceful first, then force-remove anything still there.
+# The plain run path uses stop_running directly and skips the wait
+stop_all() {
+    graceful_stop
+    stop_running
+    stop_ssdp_relay
+    if command -v tmux >/dev/null 2>&1 && tmux has-session -t iss 2>/dev/null; then
+        log "Killing tmux session 'iss'"
+        tmux kill-session -t iss
+    fi
+}
+
+shell() {
+    local running
+    running=$(running_container)
+    if [[ -z "${running}" ]]; then
+        error "No running ${CONTAINER}, start one with: ${SCRIPT_NAME}"
+        exit 1
+    fi
+
+    log "Opening a shell in ${running}"
+    # brush is the only shell in the image, and it is /bin/sh
+    ${executor} exec -it "${running}" /bin/sh "$@"
+}
+
+# Send a command to the controller's state socket and print its json reply.
+# The datagram is sent from inside the container with the venv python, which
+# reaches the socket whichever address it is bound to -- the image has no nc
+state_cmd() {
+    local running
+    running=$(running_container)
+    if [[ -z "${running}" ]]; then
+        error "No running ${CONTAINER}, start one with: ${SCRIPT_NAME}"
+        exit 1
+    fi
+
+    ${executor} exec "${running}" /venv/bin/python3 -c '
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(25)
+s.sendto(" ".join(sys.argv[1:]).encode(), ("127.0.0.1", 7042))
+try:
+    print(s.recvfrom(65535)[0].decode())
+except socket.timeout:
+    print("(no reply)")
+' "$@"
+}
+
+# Install the tray icon launch agent (macOS): copies issdc-tray.plist to
+# ~/Library/LaunchAgents and loads it with launchd, replacing an already
+# loaded one so the command doubles as reinstall after a plist change
+install_tray() {
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        error "install is only supported on macOS for now"
+        exit 1
+    fi
+
+    local plist
+    plist="$(dirname "${SCRIPT_PATH}")/issdc-tray.plist"
+    if [[ ! -f "${plist}" ]]; then
+        error "Plist not found at ${plist}"
+        exit 1
+    fi
+
+    local label program
+    label=$(/usr/libexec/PlistBuddy -c 'Print :Label' "${plist}")
+    program=$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:0' "${plist}")
+    if [[ ! -x "${program}" ]]; then
+        error "Warning: ${program} is missing or not executable," \
+              "the tray icon will not start until it is"
+    fi
+
+    local target="${HOME}/Library/LaunchAgents/${label}.plist"
+    launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
+    mkdir -p "${HOME}/Library/LaunchAgents"
+    cp "${plist}" "${target}"
+    launchctl bootstrap "gui/$(id -u)" "${target}"
+    log "Installed and started launch agent ${label} (${target})"
+    log "Remove it with: launchctl bootout gui/$(id -u)/${label}" \
+        "&& rm ${target}"
 }
 
 case "${COMMAND}" in
@@ -62,33 +476,35 @@ case "${COMMAND}" in
         log "Building iss-display with ${executor}"
         ${executor} build -t iss-display -f Containerfile .
         ;;
-    run)
-        stop_running
-        log "Using ${executor} to run ${CONTAINER}"
-        ${executor} run -e XDG_RUNTIME_DIR=/tmp \
-                        -e WLR_BACKENDS=headless \
-                        -e WLR_LIBINPUT_NO_DEVICES=1 \
-                        -e SWAYSOCK=/tmp/sway-ipc.sock \
-                        -e MOZ_ENABLE_WAYLAND=1 \
-                        -e MOZ_DISABLE_GPU_PROCESS=1 \
-                        -e MOZ_WEBRENDER=0 \
-                        -e BROWSER_FULLSCREEN=1 \
-                        -e HOLD_OUTPUTS=${HOLD_OUTPUTS} \
-                        -e URI=${DEFAULT_URIS} \
-                        -e APOD_API_KEY=${APOD_API_KEY} \
-                        -e UPDATE_CONTROLLER=0 \
-                        -e LOGLEVEL=DEBUG \
-                        -p${LISTEN_ADDRESS}:5910:5910 \
-                        -p${LISTEN_ADDRESS}:6000:6000 \
-                        -p${LISTEN_ADDRESS}:7000:7000 \
-                        -p${LISTEN_ADDRESS}:7001:7001 \
-                        -p${LISTEN_ADDRESS}:7023:7023 \
-                        --privileged \
-                        ${CONTAINER}
+    _run_container)
+        run_container
+        ;;
+    shell)
+        shift || true
+        shell "$@"
+        ;;
+    media-play-next|media-play-previous|pin-view|stop-pip|start-pip|NEXT|PREVIOUS)
+        state_cmd "${COMMAND}"
+        ;;
+    cmd)
+        shift || true
+        state_cmd "$@"
+        ;;
+    install)
+        install_tray
+        ;;
+    stop)
+        stop_all
+        ;;
+    restart)
+        restart_run
+        ;;
+    ""|run)
+        start_run
         ;;
     *)
         error "Unknown command: ${COMMAND}"
-        error "Usage: ${SCRIPT_NAME} [build|run]"
+        error "Usage: ${SCRIPT_NAME} [run|restart|build|shell|stop|install|media-play-next|media-play-previous|pin-view|stop-pip|start-pip|cmd <state command>]   (no argument also runs the display)"
         exit 1
         ;;
 esac
