@@ -1,0 +1,27 @@
+# iss Display Themes
+#
+# Select with THEME=<name> or --theme <name>
+#
+# A matching env var (THEME_BG_COLOUR, RELATIVE_PIP_SIZE,
+# PIP_POSITION, VIEW_INDICATOR, ...) overrides the value here
+#
+# An unset one falls back to the controller default
+# A theme may also carry a background # image at themes/<name>/background.jpg
+#
+# highlight_colour may be omitted to derive a complement of the two colours
+# view_indicator_colour is the playlist dots along the bottom edge
+# follows font_colour when omitted
+#
+# pip_size is a fraction of the output, 0.05 to 0.5
+# pip_position is lower-right, lower-left, upper-right or upper-left
+
+[infinit]
+bg_colour = "#280f28"
+font_colour = "#ededed"
+highlight_colour = "#66cc66"
+#view_indicator_colour = "#ededed"
+font = ""
+font_face = "Monospace"
+pip_size = 0.25
+pip_position = "upper-left"
+view_indicator = true
