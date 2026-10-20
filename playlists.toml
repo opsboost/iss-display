@@ -1,0 +1,43 @@
+# iss Display Playlists
+#
+# Select with PLAYLIST=<name> or --playlist <name>, used when no URI / --uri
+# is given. Each table has a uris list of iss:// and http(s):// entries; a
+# ?t=<seconds> sets the dwell time, ?refresh=<seconds> the content refresh
+#
+# ${VAR} in a uri expands from the environment
+#
+# An empty string in the list is the pip split: entries before it cycle full
+# size, the entry after it is pinned in the corner (and the other way round
+# when the empty string is first)
+
+[infinit]
+uris = [
+    "iss://system/top?t=20",
+    "iss://network/traceroute?t=20&refresh=300",
+    "iss://apod?t=10",
+    "iss://onthisday?t=10",
+    "iss://music?t=10",
+    "iss://calendar?t=10",
+    "iss://system/internals?t=10",
+    "iss://network?t=10",
+    "iss://network/sockets?t=10",
+    "iss://network/neighbours?t=10",
+    "iss://system/processes?t=10",
+    "iss://playlist?t=10",
+    "iss://prometheus/localhost:${LISTEN_PORT}/metrics/iss_display_http_requests_total?t=10",
+    "iss://weather?t=10",
+    "iss://art/ngoa?t=15",
+    "iss://art/mmoa?t=15",
+    "iss://system/dirsizes?t=10",
+    "iss://system/filesizes?t=10",
+    "iss://log/20",
+    "iss://bluesky/@financialtimes.com?t=12",
+    "iss://bluesky/@redditspaceviewes.bsky.social",
+    "iss://bluesky/https://bsky.app/profile/@hnwiki.bsky.social",
+    "https://news.ycombinator.com/rss?t=10",
+    "https://kite.kagi.com/world.xml?t=10",
+    "https://feeds.bbci.co.uk/news/rss.xml?t=10",
+    "https://bbusse.github.io/analog-digital-clock/?t=10",
+    "",
+    "https://raw.githubusercontent.com/jnk22/kodinerds-iptv/master/iptv/clean/clean_tv.m3u",
+]
