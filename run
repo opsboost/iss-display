@@ -17,8 +17,11 @@ host_network_address() {
     printf '%s' "${ip}"
 }
 
-export CONTAINER=localhost/iss-display
+export CONTAINER="${CONTAINER:-$([[ "${LOCAL:-0}" == "1" ]] && echo localhost/iss-display || echo ghcr.io/opsboost/iss-display:latest)}"
 readonly CONTAINER
+IMAGE_NAME=${CONTAINER##*/}
+IMAGE_NAME=${IMAGE_NAME%%[:@]*}
+readonly IMAGE_NAME
 export LISTEN_ADDRESS="[::1]"
 readonly LISTEN_ADDRESS
 # scream's rtsp and http stream ports. Unlike the web ui and vnc they carry no
@@ -125,7 +128,7 @@ readonly STREAM_TITLE
 # lets scream speak multicast directly
 export SSDP_RELAY="${SSDP_RELAY:-1}"
 readonly SSDP_RELAY
-readonly RELAY_NAME="${CONTAINER##*/}-ssdp-relay"
+readonly RELAY_NAME="${IMAGE_NAME}-ssdp-relay"
 # Where the panel's scream tunnels its ssdp. Points at the relay container,
 # reachable from the panel as host.containers.internal. Blank when the relay
 # is off
@@ -196,8 +199,10 @@ fi
 # Panel containers from the image, the relay excluded by name. The relay runs
 # from the same image so a plain ancestor filter would sweep it up too
 panel_ids() {
-    ${executor} ps --filter "ancestor=${CONTAINER}" --format "{{.ID}} {{.Names}}" \
-        | awk -v r="${RELAY_NAME}" '$2 != r {print $1}'
+    ${executor} ps --format "{{.ID}} {{.Names}} {{.Image}}" \
+        | awk -v r="${RELAY_NAME}" -v n="${IMAGE_NAME}" '
+            { img = $3; sub(/^.*\//, "", img); sub(/[:@].*$/, "", img) }
+            $2 != r && img == n { print $1 }'
 }
 
 running_container() {
