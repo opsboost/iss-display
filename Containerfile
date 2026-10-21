@@ -7,8 +7,8 @@ ARG SWLC_VERSION=v0-rc0
 ARG SWLC_PKGVER=0.0.0-r0
 ARG SCREAM_VERSION=v0-rc12
 ARG SCREAM_PKGVER=0.1.0-r0
-ARG MOONSHINE_VERSION=v0-rc18
-ARG GST_MOONSHINE_PKGVER=1.28.3-r6
+ARG MOONSHINE_VERSION=v0-rc21
+ARG GST_MOONSHINE_PKGVER=1.28.3-r7
 ARG WAYVNC_MOONSHINE_PKGVER=0.10.0-r0
 ARG SERVO_VERSION=0.5.0_rc1
 ARG SERVO_PKGREL=0
@@ -70,10 +70,10 @@ ARG WAYVNC_MOONSHINE_PKGVER
 RUN <<'SCRIPT'
 set -eu
 cat > /checksums.txt <<'SUMS'
-1e29aed35acb6ec633b2467ad00b73b5c3feec81b7db273eecafb7106b784486  wayvnc-moonshine-0.10.0-r0.aarch64-v0-rc18.apk
-00320bccd6a406489f589cf42db833637c4383c8f17c6ba5196a5b0cf883690f  wayvnc-moonshine-0.10.0-r0.x86_64-v0-rc18.apk
-94aff66523a306fc8d4c32411e6a67bcc03e9a57bb32c7aacea269ae975c0c1c  gst-moonshine-1.28.3-r6.aarch64-v0-rc18.apk
-5794d423241ba3f62c03d8319e47b846531f01f6a5ece1827b0928e5c7209953  gst-moonshine-1.28.3-r6.x86_64-v0-rc18.apk
+76cb5f3f21a02fb4f53e0fe41e7116a82f0f8d9becad1f2f49a9e2c8847f4099  wayvnc-moonshine-0.10.0-r0.aarch64-v0-rc21.apk
+90b0521a96cdc2c48b4647c7cd4b138b32d40c1971fde577510766e0320e3c2f  wayvnc-moonshine-0.10.0-r0.x86_64-v0-rc21.apk
+bd360e5ffdd85ab5006e7e2d16e154983622c254a5f20e5ac315bae9a6d1c7ce  gst-moonshine-1.28.3-r7.aarch64-v0-rc21.apk
+6009f762110fa01d660d521d99cb1fa28ad94420cbc88ac19d77af66f01cc501  gst-moonshine-1.28.3-r7.x86_64-v0-rc21.apk
 SUMS
 fetch /packages/gst-moonshine.apk \
     "https://github.com/bbusse/moonshine/releases/download/${MOONSHINE_VERSION}/gst-moonshine-${GST_MOONSHINE_PKGVER}.$(apk --print-arch)-${MOONSHINE_VERSION}.apk"
