@@ -122,6 +122,12 @@ readonly WAYVNC_PASSWORD
 # and the DLNA listing name
 export STREAM_TITLE="${STREAM_TITLE:-ISS Display}"
 readonly STREAM_TITLE
+export SCREAM_FRAMERATE="${SCREAM_FRAMERATE:-30}"
+readonly SCREAM_FRAMERATE
+export MEDIA_FRAMERATE="${MEDIA_FRAMERATE:-25}"
+readonly MEDIA_FRAMERATE
+export DISPLAY_REFRESH_HZ="${DISPLAY_REFRESH_HZ:-60}"
+readonly DISPLAY_REFRESH_HZ
 # Run a `scream --ssdp-relay-server` container on the host and tunnel the
 # panel's ssdp through it, so dlna discovery works even where container
 # multicast cannot reach the LAN. On by default. SSDP_RELAY=0 turns it off and
@@ -249,6 +255,9 @@ run_container() {
                     -e WAYVNC_USERNAME=${WAYVNC_USERNAME} \
                     -e WAYVNC_PASSWORD=${WAYVNC_PASSWORD} \
                     -e "STREAM_TITLE=${STREAM_TITLE}" \
+                    -e "SCREAM_FRAMERATE=${SCREAM_FRAMERATE}" \
+                    -e "MEDIA_FRAMERATE=${MEDIA_FRAMERATE}" \
+                    -e "DISPLAY_REFRESH_HZ=${DISPLAY_REFRESH_HZ}" \
                     -e "STREAM_SSDP_RELAY=${STREAM_SSDP_RELAY}" \
                     -e "STREAM_ADVERTISE_URL=${STREAM_ADVERTISE_URL}" \
                     -e SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID} \
